@@ -1,4 +1,4 @@
-// popup.js
+// popup.js (CNX build)
 
 let CURRENT_RUN = null;
 
@@ -21,7 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('verifyBtn').addEventListener('click', runVerification);
   document.getElementById('clearBtn').addEventListener('click', clearData);
 
-  // Summary copy button is created dynamically per run.
+  // Render macros immediately (DMARC placeholder until a run happens)
+  renderCnxMacros(null);
 });
 
 const SHARED_CLICK_TRACKING_DOMAINS = new Set([
@@ -88,6 +89,9 @@ async function runVerification() {
     renderLastChecked(now);
     renderResolverCheckBanner(CURRENT_RUN);
     renderEscalationSummary(CURRENT_RUN);
+
+    // Update macros with the latest DMARC record (if present)
+    renderCnxMacros(CURRENT_RUN);
   }
 }
 
@@ -140,7 +144,6 @@ async function verifyDynamicSendingDomain(sendingDomain, rootDomain, nsAnswers) 
       'status-error'
     );
 
-    // No record rows to render, but still show the mode note under where they would be.
     renderInfoNote(containerId, 'This is a <b>Dynamic Domain</b> setup.');
     return;
   }
@@ -164,7 +167,6 @@ async function verifyDynamicSendingDomain(sendingDomain, rootDomain, nsAnswers) 
     overallStatus === 'Verified' ? 'status-verified' : 'status-warning'
   );
 
-  // Record rows (NS records)
   nsAnswers.forEach((ans, idx) => {
     const target = stripTrailingDot(ans.data);
     const isKlaviyo = normalizeDomain(target).includes('klaviyo.com');
@@ -191,7 +193,6 @@ async function verifyDynamicSendingDomain(sendingDomain, rootDomain, nsAnswers) 
     });
   });
 
-  // Notes below records
   renderInfoNote(containerId, 'This is a <b>Dynamic Domain</b> setup.');
   renderInfrastructureNote(containerId, inferred, sendingDomain);
 }
@@ -200,7 +201,6 @@ async function verifyStaticSendingDomain(sendingDomain, rootDomain) {
   const containerId = 'sendingResults';
   const relativeName = toRelativeName(sendingDomain, rootDomain);
 
-  // Record 1: branded sending domain CNAME
   const cnameCheck = await checkRecordWithCrossCheck(sendingDomain, 'CNAME');
   const cnameAnswers = cnameCheck.answers || [];
 
@@ -227,7 +227,6 @@ async function verifyStaticSendingDomain(sendingDomain, rootDomain) {
     }
   }
 
-  // Records 2 and 3: domainkey CNAMEs
   const record2 = await findAndVerifyDomainKeyCname(rootDomain, ['kl', 'kl1', 's1']);
   const record3 = await findAndVerifyDomainKeyCname(rootDomain, ['kl2', 'kl3', 's2']);
 
@@ -236,7 +235,6 @@ async function verifyStaticSendingDomain(sendingDomain, rootDomain) {
   const hasAnyStaticEvidence = [record1Status, record2.status, record3.status].some(s => s && s !== 'Missing');
   CURRENT_RUN.sending.mode = hasAnyStaticEvidence ? 'Static' : null;
 
-  // Determine overall providers and status
   const inferred = await inferSendingInfrastructure(sendingDomain, {
     extraEvidence: [
       { domain: sendingDomain, target: record1Target, provider: record1Provider },
@@ -266,7 +264,6 @@ async function verifyStaticSendingDomain(sendingDomain, rootDomain) {
     overallStatus === 'Verified' ? 'status-verified' : (overallStatus === 'Warning' ? 'status-warning' : 'status-error')
   );
 
-  // Render record rows
   renderRecordCard(
     containerId,
     'CNAME Record 1',
@@ -300,7 +297,6 @@ async function verifyStaticSendingDomain(sendingDomain, rootDomain) {
   );
   CURRENT_RUN.sending.records.push({ label: 'CNAME Record 3', type: 'CNAME', name: record3.name, value: record3.valueRaw, status: record3.status });
 
-  // Notes below records
   if (CURRENT_RUN.sending.mode === 'Static') {
     renderInfoNote(containerId, 'This is a <b>Static</b> setup.');
   }
@@ -346,7 +342,6 @@ async function findAndVerifyDomainKeyCname(rootDomain, prefixes) {
     }
   }
 
-  // None found
   const fallbackHost = `${prefixes[0]}._domainkey.${rootDomain}`;
   const fallbackName = toRelativeName(fallbackHost, rootDomain);
   return {
@@ -399,8 +394,6 @@ async function verifyDmarc(rootDomain) {
   });
   const answers = check.answers || [];
 
-  // DMARC should have exactly one TXT record at _dmarc.<root>.
-  // If multiple DMARC records exist, many receivers will treat it as invalid.
   const dmarcRecords = answers
     .map(a => stripQuotes(a.data || ''))
     .filter(v => /v=DMARC1/i.test(v));
@@ -429,7 +422,6 @@ async function verifyDmarc(rootDomain) {
       'status-error'
     );
 
-    // List the DMARC records that were found for easy copy/paste.
     dmarcRecords.forEach((rec, idx) => {
       renderRecordCard(
         containerId,
@@ -458,7 +450,6 @@ async function verifyClickTrackingDomain(trackingDomain) {
   const rootDomain = getRootDomain(trackingDomain);
   const relativeName = toRelativeName(trackingDomain, rootDomain);
 
-  // If the input itself is a shared domain, treat as verified shared.
   if (SHARED_CLICK_TRACKING_DOMAINS.has(trackingDomain)) {
     const statusLabel = 'Verified - Shared domain';
     const value = `Shared click tracking domain: ${trackingDomain} (Klaviyo-hosted)`;
@@ -517,7 +508,6 @@ async function verifyClickTrackingDomain(trackingDomain) {
     return;
   }
 
-  // Exists, but does not match expected targets
   const fallback = stripTrailingDot(answers[0].data || '');
   CURRENT_RUN.clickTracking.status = 'Warning';
   CURRENT_RUN.clickTracking.statusLabel = 'Warning';
@@ -568,7 +558,6 @@ async function inferSendingInfrastructure(domain, { extraEvidence = [] } = {}) {
   const providers = new Set();
   const evidence = { sendgridDomains: new Set(), kmtaDomains: new Set() };
 
-  // Include extra evidence from already-found records
   (extraEvidence || []).forEach(ev => {
     if (!ev || !ev.domain || !ev.target) return;
     const provider = ev.provider || classifyProviderFromTarget(ev.target);
@@ -579,7 +568,6 @@ async function inferSendingInfrastructure(domain, { extraEvidence = [] } = {}) {
     if (provider === 'KMTA') evidence.kmtaDomains.add(normalizeDomain(ev.domain));
   });
 
-  // Check the domain itself (CNAME)
   const cname = await checkRecord(domain, 'CNAME');
   if (cname.found) {
     (cname.answers || []).forEach(a => {
@@ -593,7 +581,6 @@ async function inferSendingInfrastructure(domain, { extraEvidence = [] } = {}) {
     });
   }
 
-  // Check sibling domains (k1/k3)
   const siblings = getSiblingSendingDomains(domain);
   for (const sibling of siblings) {
     const sib = normalizeDomain(sibling);
@@ -698,7 +685,6 @@ function buildSummaryText(runState) {
   }
 
   if (runState.sending) {
-    const providersLabel = providersToLabel(runState.sending.providers);
     const infra = runState.sending.status === 'Verified'
       ? buildVerifiedInfrastructureLabel(runState.sending.providers, { fallback: 'Verified' })
       : runState.sending.statusLabel;
@@ -708,7 +694,7 @@ function buildSummaryText(runState) {
     if (runState.sending.mode) {
       lines.push(`Mode: ${runState.sending.mode}`);
     }
-    lines.push(`Sending infrastructure: ${infra}${providersLabel !== 'Unknown' && infra.startsWith('Verified') ? '' : ''}`);
+    lines.push(`Sending infrastructure: ${infra}`);
 
     if (runState.sending.records && runState.sending.records.length) {
       if (runState.sending.mode === 'Dynamic') {
@@ -744,6 +730,7 @@ function buildSummaryText(runState) {
     }
   }
 
+
   if (runState.clickTracking) {
     lines.push('');
     lines.push(`Click tracking domain: ${runState.clickTracking.input}`);
@@ -761,7 +748,6 @@ async function copyTextToClipboard(text) {
     await navigator.clipboard.writeText(text);
     return true;
   } catch (e) {
-    // Fallback
     try {
       const ta = document.createElement('textarea');
       ta.value = text;
@@ -775,10 +761,79 @@ async function copyTextToClipboard(text) {
       return ok;
     } catch (err) {
       console.error(err);
-      alert('Unable to copy to clipboard. Please copy manually from the summary text.');
+      alert('Unable to copy to clipboard. Please copy manually.');
       return false;
     }
   }
+}
+
+/* -------------------------
+   CNX macros
+-------------------------- */
+function getDmarcForMacro(runState) {
+  if (!runState || !runState.dmarc || runState.dmarc.status !== 'Verified') return '(insert DMARC record)';
+  return runState.dmarc.value || '(insert DMARC record)';
+}
+
+function buildMacroTexts(runState) {
+  const macro1 =
+`I have been unable to verify the required DNS records for your branded sending domain.
+
+Please review the following guide to confirm which records need to be added to your domain:
+https://help.klaviyo.com/hc/en-us/articles/115000357752#h_01HCMT58PN23FZWBGHTNDDRY3K
+
+If you have already added these records, I recommend contacting your domain provider's support team to confirm the records are correct and fully propagated.`;
+
+  const macro2 =
+`I can confirm your click tracking records are configured correctly.
+
+I will now escalate this to the Deliverability team so they can apply the click tracking domain to your account.`;
+
+  const macro3 =
+`I can confirm your DMARC record is present:
+
+${getDmarcForMacro(runState)}`;
+
+  return [
+    { title: 'Missing DNS records', body: macro1 },
+    { title: 'Click tracking confirmed', body: macro2 },
+    { title: 'DMARC confirmed', body: macro3 }
+  ];
+}
+
+function renderCnxMacros(runState) {
+  const container = document.getElementById('macrosResults');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const macros = buildMacroTexts(runState);
+
+  macros.forEach((m, idx) => {
+    const card = document.createElement('div');
+    card.className = 'result-section';
+
+    const copyId = `macroCopyBtn_${idx}`;
+    card.innerHTML = `
+      <div class="result-row">
+        <strong class="macro-title">${escapeHtml(m.title)}</strong>
+        <button id="${copyId}" class="small-btn copy" type="button">Copy</button>
+      </div>
+      <div class="macro-body">${escapeHtml(m.body)}</div>
+    `;
+
+    container.appendChild(card);
+
+    const btn = document.getElementById(copyId);
+    btn.addEventListener('click', async () => {
+      const ok = await copyTextToClipboard(m.body);
+      if (!ok) return;
+
+      const original = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => { btn.textContent = original; }, 1200);
+    });
+  });
 }
 
 /* -------------------------
@@ -807,25 +862,24 @@ async function checkRecordWithCrossCheck(domain, type, options = {}) {
 
 async function checkRecordGoogle(domain, type) {
   try {
-    // Force a fresh network fetch for each lookup.
-    // This prevents browser/HTTP caching of the DoH response between runs.
-    // Note: DNS resolvers can still cache results per TTL, so even a "fresh" request can
-    // legitimately return a cached answer for a short period.
     const cacheBust = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const url = new URL('https://dns.google/resolve');
     url.searchParams.set('name', domain);
     url.searchParams.set('type', type);
     url.searchParams.set('_cb', cacheBust);
 
-    const response = await fetch(url.toString(), { cache: 'no-store' });
-    const data = await response.json();
+    const response = await fetch(url.toString(), {
+      cache: 'no-store'
+    });
 
+    const data = await response.json();
     if (data && Array.isArray(data.Answer) && data.Answer.length > 0) {
       return { found: true, answers: data.Answer };
     }
   } catch (e) {
     console.error(e);
   }
+
   return { found: false, answers: [] };
 }
 
@@ -844,14 +898,15 @@ async function checkRecordCloudflare(domain, type) {
         accept: 'application/dns-json'
       }
     });
-    const data = await response.json();
 
+    const data = await response.json();
     if (data && Array.isArray(data.Answer) && data.Answer.length > 0) {
       return { found: true, answers: data.Answer };
     }
   } catch (e) {
     console.error(e);
   }
+
   return { found: false, answers: [] };
 }
 
@@ -865,11 +920,13 @@ function didResolversDisagree(type, googleAnswers, cloudflareAnswers, txtPredica
   for (let i = 0; i < g.length; i++) {
     if (g[i] !== c[i]) return true;
   }
+
   return false;
 }
 
 function buildComparableAnswerSet(type, answers, txtPredicate) {
   const raw = Array.isArray(answers) ? answers : [];
+
   let values = raw
     .map(a => (a && a.data ? a.data : ''))
     .filter(Boolean)
@@ -914,9 +971,10 @@ function renderResolverCheckBanner(runState) {
   }
 
   const items = runState.resolverMismatches.map(m => `${m.type} ${m.domain}`).join(', ');
-  el.textContent = `Propagation check: Google DNS and Cloudflare DNS returned different results for ${runState.resolverMismatches.length} lookup(s): ${items}. DNS changes may still be propagating. Try again in a few minutes.`;
 
+  el.textContent = `Propagation check: Google DNS and Cloudflare DNS returned different results for ${runState.resolverMismatches.length} lookup(s): ${items}. DNS changes may still be propagating. Try again in a few minutes.`;
   el.classList.remove('hidden');
+
   el.style.background = '#fff3cd';
   el.style.color = '#856404';
   el.style.border = '1px solid #ffeeba';
@@ -1158,6 +1216,9 @@ function clearData() {
   }
 
   CURRENT_RUN = null;
+
+  // Reset macros back to placeholder DMARC
+  renderCnxMacros(null);
 }
 
 function clearResults() {
@@ -1178,8 +1239,12 @@ function hideLoading() {
 
 function showResults() {
   document.getElementById('resultsArea').classList.remove('hidden');
+  const summaryArea = document.getElementById('summaryArea');
+  if (summaryArea) summaryArea.classList.remove('hidden');
 }
 
 function hideResults() {
   document.getElementById('resultsArea').classList.add('hidden');
+  const summaryArea = document.getElementById('summaryArea');
+  if (summaryArea) summaryArea.classList.add('hidden');
 }

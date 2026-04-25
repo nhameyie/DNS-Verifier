@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Klaviyo DNS Verifier",
+  "name": "Klaviyo DNS Verifier - CNX",
   "version": "2.1.7",
   "description": "Verifies DNS records for Klaviyo branded sending domains, DMARC, and click tracking.",
   "permissions": [
