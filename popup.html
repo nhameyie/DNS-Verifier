@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h2>Klaviyo DNS Verifier</h2>
+
+    <div class="input-group">
+      <label for="sendingDomain">Branded Sending Domain</label>
+      <input type="text" id="sendingDomain" placeholder="e.g., email.exampledomain.com">
+    </div>
+
+    <div class="input-group">
+      <label for="trackingDomain">Click Tracking Domain</label>
+      <input type="text" id="trackingDomain" placeholder="e.g., trk.exampledomain.com">
+    </div>
+
+    <div class="button-group">
+      <button id="verifyBtn">Verify Records</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <div id="lastChecked" class="last-checked hidden"></div>
+
+    <div id="resolverCheck" class="hidden"></div>
+
+    <div id="loading" class="loading hidden">
+      Querying DNS records...
+    </div>
+
+    <div id="resultsArea" class="hidden">
+      <h3>Sending Infrastructure</h3>
+      <div id="sendingResults"></div>
+
+      <h3>Account Verification</h3>
+      <div id="rootResults"></div>
+
+      <h3>DMARC Policy</h3>
+      <div id="dmarcResults"></div>
+
+      <h3>Click Tracking</h3>
+      <div id="trackingResults"></div>
+
+      <h3>Escalation Summary</h3>
+      <div id="summaryResults"></div>
+
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

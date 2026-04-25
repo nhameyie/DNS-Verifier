@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Klaviyo DNS Verifier",
+  "version": "2.1.7",
+  "description": "Verifies DNS records for Klaviyo branded sending domains, DMARC, and click tracking.",
+  "permissions": [
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://dns.google/*",
+    "https://cloudflare-dns.com/*"
+  ],
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open DNS Verifier"
+  }
+}
